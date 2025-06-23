@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 # Load the CSV with a datetime index
 df = pd.read_csv(
     'GUI_ENERGY_PRICES_202412312300-202512312300.csv',
@@ -39,7 +40,7 @@ def solve_dp_tracking(price_series,
     C, R   = capacity_mwh, max_rate_mw
 
     soc_grid = np.linspace(0, C, discrete_levels)
-    V        = np.zeros((T+1, discrete_levels))
+    V        = np.zeros((T+1, discrete_levels)) # state is (time_step,discrete_level)
     policy   = np.zeros((T,   discrete_levels))  
 
     base_actions = np.array([-R, 0.0, +R])
@@ -48,7 +49,7 @@ def solve_dp_tracking(price_series,
         p = prices[t]
         for i, soc in enumerate(soc_grid):
             best_val, best_a = -np.inf, 0.0
-
+            # find best state val and action for this state of charge at time t 
             for a in base_actions:
                 # enforce feasibility
                 if a > 0 and soc >= C:   # can't charge if full
@@ -185,15 +186,7 @@ df = pd.read_csv(
 )
 prices = df['Day-ahead Price (EUR/MWh)']
 
-# profit, schedule = solve_dp_tracking(
-#     prices,
-#     capacity_mwh=1.0,
-#     max_rate_mw=0.25,
-#     eff=0.75,
-#     discrete_levels=100,
-#     init_soc_frac=0.0
-# )
-profit = solve_dp(
+profit, schedule = solve_dp_tracking(
     prices,
     capacity_mwh=1.0,
     max_rate_mw=0.25,
@@ -201,6 +194,23 @@ profit = solve_dp(
     discrete_levels=100,
     init_soc_frac=0.0
 )
+# profit = solve_dp(
+#     prices,
+#     capacity_mwh=1.0,
+#     max_rate_mw=0.25,
+#     eff=0.75,
+#     discrete_levels=100,
+#     init_soc_frac=0.0
+# )
 print("DP optimal profit:", profit)
+times = schedule.index
+plt.plot(times, schedule.soc_before, label='SoC')
+charge = schedule.action_mw.clip(lower=0)
+dischg = -schedule.action_mw.clip(upper=0)
+plt.bar(times, charge,  bottom=schedule.soc_before, color='green',   width=0.01)
+plt.bar(times, dischg, bottom=schedule.soc_before, color='red',     width=0.01)
+plt.legend()
+plt.savefig('profit_timeline.jpg')
+
 #print("\nFirst 10 steps:")
 #print(schedule.head(10))

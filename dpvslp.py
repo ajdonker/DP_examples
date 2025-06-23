@@ -2,6 +2,7 @@ import time
 import numpy as np
 import pandas as pd
 from scipy.optimize import linprog
+from scipy.sparse import lil_matrix
 import numba
 @numba.njit
 def solve_dp_numba(prices, C, R, η, N):
@@ -35,7 +36,7 @@ def solve_dp_numba(prices, C, R, η, N):
             V[t, i] = best
     return V[0, N//2]
 
-from scipy.sparse import lil_matrix
+
 # DP solver from above
 def solve_dp(price, C=1.0, R=0.25, eff=0.99, N=41):
     T = len(price)
@@ -84,32 +85,6 @@ def solve_lp_sparse(prices, C=1.0, R=0.25, η=0.95, soc0=None):
     bounds = [(0, R)]*T + [(0, R)]*T + [(0, C)]*(T+1)
     res = linprog(c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='highs')
     return -res.fun
-def solve_lp(price, C=1.0, R=0.25, η=0.95, soc0=None):
-    T = len(price)
-    if soc0 is None:
-        soc0 = C/2
-    # decision vars: c0..c_{T-1}, d0..d_{T-1}, s0..s_T
-    n = 2*T + (T+1)
-    # Objective: minimize price*c - price*d (i.e. maximize price*d - price*c)
-    c = np.concatenate([price, -price, np.zeros(T+1)])
-    # Equality constraints
-    A_eq = np.zeros((T+1, n))
-    b_eq = np.zeros(T+1)
-    # s0 = soc0
-    A_eq[0, 2*T] = 1
-    b_eq[0] = soc0
-    # SoC dynamics
-    for t in range(T):
-        A_eq[t+1,     t    ] = -η
-        A_eq[t+1,   T + t  ] =  1/η
-        A_eq[t+1, 2*T + t  ] = -1
-        A_eq[t+1, 2*T + t+1] =  1
-    # Bounds for each variable
-    bounds = [(0, R)]*T + [(0, R)]*T + [(0, C)]*(T+1)
-    # Solve
-    res = linprog(c=c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='highs')
-    profit = -res.fun
-    return profit
 horizons = [96, 288, 672, 1440, 2880,5760,11520,35040]  
 results = []
 for T in horizons:

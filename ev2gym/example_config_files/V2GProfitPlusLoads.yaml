@@ -21,7 +21,7 @@ simulation_days: both # weekdays, weekends, or both
 # EV Spawn Behavior
 scenario: public # public, private, or workplace
 spawn_multiplier: 10 # 1 is default, the higher the number the more EVs spawn
-
+save_plots: True
 ##############################################################################
 # Prices
 ##############################################################################
