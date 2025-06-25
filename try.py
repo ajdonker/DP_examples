@@ -22,9 +22,6 @@ df = pd.read_excel(
     skiprows=4,
     header=0                             
 ).iloc[1:]
-#drop first row 
-#print(df.columns)
-#print("columns:", df.columns.tolist())
 date_col = df.columns[0]
 df = df.rename(columns={
     df.columns[0]: 'YearMonth',
@@ -35,11 +32,7 @@ df['Date'] = pd.to_datetime(
     format='%Y-%m'
 )
 df = df.set_index('Date')
-#print(df['YearMonth'].head)
-#print(df.columns.tolist())
 ng2024 = df['Natural gas, Europe'].loc['2024']
-
-# 6) Upsample monthly → hourly → 15-min
 ng_hourly = ng2024.resample('h').ffill()
 price_gas  = ng_hourly .resample('15min').ffill()
 print(price_gas.tail)
@@ -48,7 +41,6 @@ print("price_gas spans", price_gas.min(), "to", price_gas.max())
 
 print("price_gas  entries:", len(price_gas))
 print("price_gas spans", price_gas.index.min(), "to", price_gas.index.max())
-# --- 3) Define DP start-up/shutdown machine for a single plant ---
 next_states = {
     0: [0, 6],  # OFF -> OFF or U1
     6: [7], 7: [8], 8: [9],
@@ -84,7 +76,7 @@ P_output = {
     10: 110, 11: 160, 12: 400, 13: 550, 14: 700
 }
 P_max = 700
-def dp_plant_tracking(price_elec,price_gas,startup_cost=100000,alpha=630,beta=7.7,gamma=0.0004,partial_load_penalty=0.5):
+def dp_plant_tracking(price_elec,price_gas,startup_cost=1000000,alpha=630,beta=7.7,gamma=0.0004,partial_load_penalty=0):
     times = price_gas.index
     T = len(times)
     states = list(next_states.keys())
@@ -136,7 +128,7 @@ def dp_plant_tracking(price_elec,price_gas,startup_cost=100000,alpha=630,beta=7.
     schedule = pd.DataFrame(records).set_index('time')    
     return V,schedule
 def dp_plant_profit(price_elec,price_gas,startup_cost=100000,alpha=630,beta=7.7,gamma=0.0004,
-                    partial_load_penalty=0.5):
+                    partial_load_penalty=0.1):
     times = price_gas.index
     T = len(times)
     states = list(next_states.keys())
@@ -180,7 +172,7 @@ plt.figure(figsize=(8, 4))
 plt.hist(
     step_profits, 
     bins=50, 
-    range=(0, 100000), 
+    range=(1, 100000), 
     edgecolor='black'
 )
 plt.xlabel('Step Profit Magnitude (EUR)')

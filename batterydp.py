@@ -1,22 +1,20 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-# Load the CSV with a datetime index
 df = pd.read_csv(
-    'GUI_ENERGY_PRICES_202412312300-202512312300.csv',
+    #'GUI_ENERGY_PRICES_202412312300-202512312300.csv',
+    'GUI_ENERGY_PRICES_202312312300-202412312300.csv',
     index_col=0,
     parse_dates=True
 )
 
-# State: (SoCt,  pt)(SoCt​,pt​)
+# State: (SoCt, t)(SoCt​,t​)
 
 # Action: charge / hold / discharge (discrete) or continuous power level.
 
 # Reward:   rt=pt×Pdischarge,t−pt×Pcharge,trt​=pt​×Pdischarge,t​−pt​×Pcharge,t​ (minus any cycling cost).
 
-# Display the DataFrame to the user
 print(df.columns)
-# i want the column AT_price_day_ahead 
 
 df = df['Day-ahead Price (EUR/MWh)']
 
@@ -24,7 +22,7 @@ print(len(df))
 
 
 def solve_dp_tracking(price_series, 
-                      capacity_mwh=1.0, 
+                      capacity_mw=1.0, 
                       max_rate_mw=0.25, 
                       eff=0.90, 
                       discrete_levels=41,
@@ -37,10 +35,10 @@ def solve_dp_tracking(price_series,
     prices = price_series.values
     times  = price_series.index
     T      = len(prices)
-    C, R   = capacity_mwh, max_rate_mw
+    C, R   = capacity_mw, max_rate_mw
 
     soc_grid = np.linspace(0, C, discrete_levels)
-    V        = np.zeros((T+1, discrete_levels)) # state is (time_step,discrete_level)
+    V        = np.zeros((T+1, discrete_levels)) # state is (time_step,SoC discrete_level)
     policy   = np.zeros((T,   discrete_levels))  
 
     base_actions = np.array([-R, 0.0, +R])
@@ -91,10 +89,13 @@ def solve_dp_tracking(price_series,
         a = policy[t, soc_idx]
         if a > 0:
             actual = min(a, C - soc)
+            step_profit = -p * actual
         elif a < 0:
             actual = -min(-a, soc)  
+            step_profit = p * (-actual) * eff
         else:
             actual = 0.0
+            step_profit = 0.0
 
         # decide label
         if actual > 0:
@@ -109,7 +110,8 @@ def solve_dp_tracking(price_series,
             'soc_before':  soc,
             'action_mw':   actual,
             'action_type': atype,
-            'price':       prices[t]
+            'price':       prices[t],
+            'step_profit':  step_profit
         })
         soc = soc + actual * eff if actual>0 else soc + actual / eff if actual<0 else soc
         soc = max(0, min(C, soc))
@@ -119,7 +121,7 @@ def solve_dp_tracking(price_series,
     return optimal_profit, schedule_df
 
 def solve_dp(price_series, 
-            capacity_mwh=1.0, 
+            capacity_mw=1.0, 
             max_rate_mw=0.25, 
             eff=0.90, 
             discrete_levels=41,
@@ -132,7 +134,7 @@ def solve_dp(price_series,
     prices = price_series.values
     times  = price_series.index
     T      = len(prices)
-    C, R   = capacity_mwh, max_rate_mw
+    C, R   = capacity_mw, max_rate_mw
 
     soc_grid = np.linspace(0, C, discrete_levels)
     V        = np.zeros((T+1, discrete_levels))
@@ -181,14 +183,15 @@ def solve_dp(price_series,
 
 
 df = pd.read_csv(
-    'GUI_ENERGY_PRICES_202412312300-202512312300.csv',
+    #'GUI_ENERGY_PRICES_202412312300-202512312300.csv',
+    'GUI_ENERGY_PRICES_202312312300-202412312300.csv',
     index_col=0, parse_dates=True
 )
 prices = df['Day-ahead Price (EUR/MWh)']
 
 profit, schedule = solve_dp_tracking(
     prices,
-    capacity_mwh=1.0,
+    capacity_mw=1.0,
     max_rate_mw=0.25,
     eff=0.75,
     discrete_levels=100,
@@ -196,7 +199,7 @@ profit, schedule = solve_dp_tracking(
 )
 # profit = solve_dp(
 #     prices,
-#     capacity_mwh=1.0,
+#     capacity_mw=1.0,
 #     max_rate_mw=0.25,
 #     eff=0.75,
 #     discrete_levels=100,

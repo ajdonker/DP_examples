@@ -4,8 +4,16 @@ import pandas as pd
 from scipy.optimize import linprog
 from scipy.sparse import lil_matrix
 import numba
+df = pd.read_csv(
+    #'GUI_ENERGY_PRICES_202412312300-202512312300.csv',
+    'GUI_ENERGY_PRICES_202312312300-202412312300.csv',
+    index_col=0,
+    parse_dates=True
+)
+prices = df['Day-ahead Price (EUR/MWh)']
+price_arr = prices.to_numpy(dtype=np.float64)
 @numba.njit
-def solve_dp_numba(prices, C, R, η, N):
+def solve_dp_numba(prices, C, R, η, N,init_soc_frac):
     T = prices.shape[0]
     soc_grid = np.linspace(0.0, C, N)
     V = np.zeros((T+1, N))
@@ -34,11 +42,10 @@ def solve_dp_numba(prices, C, R, η, N):
                 if val > best:
                     best = val
             V[t, i] = best
-    return V[0, N//2]
+    #return V[0, N//2]
+    
 
-
-# DP solver from above
-def solve_dp(price, C=1.0, R=0.25, eff=0.99, N=41):
+def solve_dp(price, C=1.0, R=0.25, eff=0.95, N=100, init_soc_frac=0.5):
     T = len(price)
     soc_grid = np.linspace(0, C, N)
     V = np.zeros((T+1, N))
@@ -64,9 +71,10 @@ def solve_dp(price, C=1.0, R=0.25, eff=0.99, N=41):
                 if val > best:
                     best = val
             V[t, i] = best
-    return V[0, int((N-1)/2)]
+    #return V[0, int((N-1)/2)]
+    init_index = int(np.round(init_soc_frac * (N-1)))
+    return V[0, init_index]
 
-# Sparse LP solver
 def solve_lp_sparse(prices, C=1.0, R=0.25, η=0.95, soc0=None):
     T = len(prices)
     if soc0 is None: soc0 = C/2
@@ -88,14 +96,15 @@ def solve_lp_sparse(prices, C=1.0, R=0.25, η=0.95, soc0=None):
 horizons = [96, 288, 672, 1440, 2880,5760,11520,35040]  
 results = []
 for T in horizons:
-    price = np.random.rand(T) * 50 + 20
+    price_slice = price_arr[:T]
     start = time.time()
-    dp_profit = solve_dp_numba(price,1.0,0.25,0.95,99)
+    dp_profit = solve_dp_numba(price_slice,1.0,0.25,0.95,100,0.5)
     dp_time = time.time() - start
     start = time.time()
-    lp_profit = solve_lp_sparse(price)
+    lp_profit = solve_lp_sparse(price_slice)
     lp_time = time.time() - start
-    results.append({'Horizon (periods)': T, 'DP time (s)': dp_time, 'LP time (s)': lp_time})
+    results.append({'Хоризонт (број на 15мин периоди)': T, 'Време Д.П. (s)': dp_time, 'Време Л.П. (s)': lp_time,
+                    'Профит Д.П.':dp_profit,'Профит Л.П.':lp_profit})
 
 df_results = pd.DataFrame(results)
 print(df_results)
